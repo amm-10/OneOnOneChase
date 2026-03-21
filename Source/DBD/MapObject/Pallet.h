@@ -7,10 +7,9 @@
 UENUM(BlueprintType)
 enum class EPalletState : uint8
 {
-	Upright,          // 0: 세워짐
-	DroppedForward,   // 1: 앞에서 상호작용 -> 뒤로 넘어짐
-	DroppedBackward,  // 2: 뒤에서 상호작용 -> 앞으로 넘어짐
-	Destroyed         // 3: 부서짐 
+	Upright,    // 0: 세워짐
+	Dropped,    // 1: 넘어짐 (앞/뒤 구분 제거)
+	Destroyed   // 2: 부서짐 
 };
 
 UCLASS()
@@ -41,17 +40,26 @@ protected:
 	UFUNCTION()
 	void OnRep_PalletState();
 
+	// 변경됨: 방향 구분이 필요 없으므로 매개변수(bool bIsForward)를 제거했습니다.
 	UFUNCTION(BlueprintImplementableEvent, Category = "Events")
-	void BP_OnPalletDropped(bool bIsForward);
+	void BP_OnPalletDropped();
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Events")
 	void BP_OnPalletDestroyed();
 
-public:
-	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Interaction")
-	void Server_Interact(AActor* Interactor);
+	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
+	void BP_OnSeekerStunned(AActor* Seeker, float StunTime);
 
-	// 모든 플레이어의 화면에 텍스트를 띄워주는 멀티캐스트 함수
+	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
+	void BP_OnHiderVault(AActor* Hider);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
+	void BP_OnSeekerDestroyPallet(AActor* Seeker);
+
+public:
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	void DoInteract(AActor* Interactor);
+
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PrintAction(const FString& ActionText);
 };
