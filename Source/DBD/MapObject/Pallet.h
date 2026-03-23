@@ -53,7 +53,7 @@ protected:
 	void BP_OnHiderDropPallet(AActor* Hider);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
-	void BP_OnHiderVault(AActor* Hider);
+	void BP_OnHiderVault(AActor* Hider, FVector StartLoc, FVector EndLoc);
 
 
 

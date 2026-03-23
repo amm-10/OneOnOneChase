@@ -40,7 +40,12 @@ void APallet::OnRep_PalletState()
 	// 변경됨: 단일 상태(Dropped)로 통합
 	if (PalletState == EPalletState::Dropped)
 	{
+		// 1. 일단 모든 채널을 Block으로 막습니다.
 		StunBox->SetCollisionResponseToAllChannels(ECR_Block);
+
+		// 2. 카메라 채널만 다시 유령 취급(Ignore)으로 뚫어줍니다. (카메라 줌인 방지)
+		StunBox->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+
 		BP_OnPalletDropped(); // 매개변수 없이 호출
 	}
 	else if (PalletState == EPalletState::Destroyed)
@@ -167,12 +172,33 @@ void APallet::DoInteract(AActor* Interactor)
 	// ==========================================================
 	// 판자가 이미 내려져 있을 때 (넘어가기 or 부수기)
 	// ==========================================================
+// ==========================================================
+	// 판자가 이미 내려져 있을 때 (넘어가기 or 부수기)
+	// ==========================================================
 	else if (PalletState == EPalletState::Dropped)
 	{
 		if (bIsHider)
 		{
-			// 블루프린트에서 생존자 '넘어가기' 애니메이션 재생
-			BP_OnHiderVault(Interactor);
+			// 1. 반대쪽 상호작용 박스 판별
+			UBoxComponent* TargetBox = (ActiveBox == FrontInteractionBox) ? BackInteractionBox : FrontInteractionBox;
+
+			// 2. 시작 위치와 도착 위치 가져오기
+			FVector StartLoc = ActiveBox->GetComponentLocation();
+			FVector EndLoc = TargetBox->GetComponentLocation();
+
+			// 3. Z축(높이)을 생존자의 현재 위치로 맞춰서 공중에 뜨거나 파묻히는 것 방지
+			StartLoc.Z = Interactor->GetActorLocation().Z;
+			EndLoc.Z = Interactor->GetActorLocation().Z;
+
+			// 4. 도착 지점 연장: 넘어가는 방향으로 0.5미터(50유닛) 더 가기
+			// 도착점에서 시작점을 빼서 넘어가는 방향 벡터를 구하고 정규화(길이를 1로 만듦)
+			FVector VaultDirection = (EndLoc - StartLoc).GetSafeNormal();
+
+			// 그 방향으로 50(cm)만큼 도착 지점을 더 밀어줌
+			EndLoc += VaultDirection * 50.0f;
+
+			// 5. 블루프린트로 이벤트 전달 (인자 포함)
+			BP_OnHiderVault(Interactor, StartLoc, EndLoc);
 		}
 		else if (bIsSeeker)
 		{
