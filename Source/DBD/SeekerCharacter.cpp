@@ -27,6 +27,11 @@ void ASeekerCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// ★ 핵심: bIsVaulting이 참일 때 매 프레임마다 회전값을 강제로 꽂아버림 (서버 롤백 방어)
+	if (_bIsSetRotation)
+	{
+		SetActorRotation(_targetRotation);
+	}
 }
 
 // Called to bind functionality to input
@@ -34,6 +39,12 @@ void ASeekerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
+}
+
+void ASeekerCharacter::SetForceRotation(bool bIsSetRotation, FRotator targetRotation)
+{
+	_bIsSetRotation = bIsSetRotation;
+	_targetRotation = targetRotation;
 }
 
 // 변수 동기화 등록 (필수)
@@ -84,6 +95,59 @@ void ASeekerCharacter::EndStun()
 		EnableInput(PC);
 	}
 }
+
+
+void ASeekerCharacter::StartDestroyPallet()
+{
+	// 블루프린트에서 달았던 OR (Is Locally Controlled || Has Authority) 노드와 완전히 같은 역할!
+	if (IsLocallyControlled() || HasAuthority())
+	{
+		// 1. 회전 고정 켜기 (Event Tick에서 돌아가도록)
+		//SetForceRotation(true, InTargetRotation);
+
+		// 2. 판자 충돌 무시 (Ignore)
+	/*	if (UCapsuleComponent* Cap = GetCapsuleComponent())
+		{
+			Cap->SetCollisionResponseToChannel(PalletCollisionChannel, ECR_Ignore);
+		}*/
+		// 입력 제한
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			DisableInput(PC);
+		}
+		//// 3. 키보드/마우스 이동 입력 막기
+		//if (Controller)
+		//{
+		//	Controller->SetIgnoreMoveInput(true);
+		//}
+	}
+}
+
+void ASeekerCharacter::StopDestroyPallet()
+{
+	if (IsLocallyControlled() || HasAuthority())
+	{
+		// 1. 회전 고정 끄기
+		SetForceRotation(false);
+
+		//// 2. 판자 충돌 원상복구 (Block)
+		//if (UCapsuleComponent* Cap = GetCapsuleComponent())
+		//{
+		//	Cap->SetCollisionResponseToChannel(PalletCollisionChannel, ECR_Block);
+		//}
+		// 입력 복구
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			EnableInput(PC);
+		}
+		//// 3. 키보드/마우스 이동 입력 복구
+		//if (Controller)
+		//{
+		//	Controller->SetIgnoreMoveInput(false);
+		//}
+	}
+}
+
 
 // =======================================================
 // 동기화 알림: 클라이언트들의 화면에서 자동으로 실행됨

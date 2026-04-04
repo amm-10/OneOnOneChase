@@ -19,7 +19,6 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	// 판자 넘기 상태를 체크할 bool 변수
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Vaulting")
 	bool _bIsSetRotation;
 
