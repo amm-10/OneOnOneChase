@@ -5,6 +5,7 @@
 
 AOneOnOneGameMode::AOneOnOneGameMode()
 {
+	DefaultPawnClass = nullptr;
 }
 
 void AOneOnOneGameMode::PostLogin(APlayerController* NewPlayer)
@@ -19,11 +20,21 @@ void AOneOnOneGameMode::PostLogin(APlayerController* NewPlayer)
 
 	if (PlayerCount == 1 && SeekerClass != nullptr)
 	{
-		SpawnedPawn = GetWorld()->SpawnActor<APawn>(SeekerClass, SpawnLocation, SpawnRotation);
+		// 1. 스폰 규칙 설정: 충돌해도 무조건 스폰(AlwaysSpawn)하게 만듭니다.
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		// 2. 맨 끝에 SpawnParams를 추가해서 스폰합니다.
+		SpawnedPawn = GetWorld()->SpawnActor<APawn>(SeekerClass, SpawnLocation, SpawnRotation, SpawnParams);
 	}
 	else if (PlayerCount == 2 && HiderClass != nullptr)
 	{
-		SpawnedPawn = GetWorld()->SpawnActor<APawn>(HiderClass, SpawnLocation, SpawnRotation);
+		// 1. 스폰 규칙 설정: 충돌해도 무조건 스폰(AlwaysSpawn)하게 만듭니다.
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		// 2. 맨 끝에 SpawnParams를 추가해서 스폰합니다.
+		SpawnedPawn = GetWorld()->SpawnActor<APawn>(HiderClass, SpawnLocation, SpawnRotation, SpawnParams);
 	}
 
 	if (SpawnedPawn && NewPlayer)

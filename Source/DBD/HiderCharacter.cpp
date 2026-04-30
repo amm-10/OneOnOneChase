@@ -10,6 +10,7 @@ AHiderCharacter::AHiderCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 
 	// 변수 초기화
+	DefaultWalkSpeed = 600.0f;
 	_bIsSetRotation = false;
 	_targetRotation = FRotator::ZeroRotator;
 
