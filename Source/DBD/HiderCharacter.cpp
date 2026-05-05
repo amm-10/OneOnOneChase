@@ -2,49 +2,49 @@
 #include "HiderCharacter.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Controller.h"
+#include "Net/UnrealNetwork.h" // 동기화 필수 헤더
+#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 AHiderCharacter::AHiderCharacter()
 {
-	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
-	// 변수 초기화
 	DefaultWalkSpeed = 600.0f;
 	_bIsSetRotation = false;
 	_targetRotation = FRotator::ZeroRotator;
 
-	// 기본값을 하나 넣어줍니다. (나중에 블루프린트에서 Pallet 채널로 바꿀 겁니다)
+	// 상호작용 장애물 채널
 	PalletCollisionChannel = ECC_WorldDynamic;
 }
 
-// Called when the game starts or when spawned
+// [추가] bIsInteracting 변수를 서버-클라이언트 간에 동기화시킵니다!
+void AHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AHiderCharacter, bIsInteracting);
+}
+
 void AHiderCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
 }
 
-// Called every frame
 void AHiderCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// ★ 핵심: bIsVaulting이 참일 때 매 프레임마다 회전값을 강제로 꽂아버림 (서버 롤백 방어)
 	if (_bIsSetRotation)
 	{
 		SetActorRotation(_targetRotation);
 	}
 }
 
-// Called to bind functionality to input
 void AHiderCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
 }
 
-// 블루프린트에서 호출할 설정 함수 구현부
 void AHiderCharacter::SetForceRotation(bool bIsSetRotation, FRotator targetRotation)
 {
 	_bIsSetRotation = bIsSetRotation;
@@ -52,12 +52,50 @@ void AHiderCharacter::SetForceRotation(bool bIsSetRotation, FRotator targetRotat
 }
 
 
+// =========================================================
+// [핵심 추가] 상호작용 상태가 변하면 '모두의 컴퓨터'에서 실행되는 함수
+// =========================================================
+void AHiderCharacter::OnRep_IsInteracting()
+{
+	if (UCapsuleComponent* Cap = GetCapsuleComponent())
+	{
+		if (bIsInteracting)
+		{
+			// 상호작용 중일 땐 모두의 화면에서 충돌 무시! (러버밴딩 해결)
+			Cap->SetCollisionResponseToChannel(PalletCollisionChannel, ECR_Ignore);
+			// [추가] 3. 허공에 있는 동안 중력에 의해 밑으로 당겨지며 부들거리는 현상 방지!
+			if (GetCharacterMovement())
+			{
+				GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+			}
+		}
+		else
+		{
+			// 1. 모두 원상복구 (Block)
+			Cap->SetCollisionResponseToChannel(PalletCollisionChannel, ECR_Block);
+			Cap->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+
+			// 2. 다시 걷기 모드로 복구 (중력 적용)
+			if (GetCharacterMovement())
+			{
+				GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+			}
+		}
+	}
+}
+
+
+// =========================================================
+// 액션 함수들 (Start / Stop)
+// =========================================================
+
 void AHiderCharacter::StartPalletDrop()
 {
-	// 블루프린트에서 달았던 OR (Is Locally Controlled || Has Authority) 노드와 완전히 같은 역할!
 	if (IsLocallyControlled() || HasAuthority())
 	{
-		// 키보드/마우스 이동 입력 막기
+		bIsInteracting = true;
+		OnRep_IsInteracting(); // 로컬/서버에서도 즉시 콜리전 끄기 위해 강제 호출!
+
 		if (Controller)
 		{
 			Controller->SetIgnoreMoveInput(true);
@@ -69,10 +107,10 @@ void AHiderCharacter::StopPalletDrop()
 {
 	if (IsLocallyControlled() || HasAuthority())
 	{
-		// 회전 고정 끄기
+		bIsInteracting = false;
+		OnRep_IsInteracting(); // 로컬/서버 콜리전 원상복구
 		SetForceRotation(false);
 
-		// 키보드/마우스 이동 입력 복구
 		if (Controller)
 		{
 			Controller->SetIgnoreMoveInput(false);
@@ -82,19 +120,11 @@ void AHiderCharacter::StopPalletDrop()
 
 void AHiderCharacter::StartVaulting()
 {
-	// 블루프린트에서 달았던 OR (Is Locally Controlled || Has Authority) 노드와 완전히 같은 역할!
 	if (IsLocallyControlled() || HasAuthority())
 	{
-		// 1. 회전 고정 켜기 (Event Tick에서 돌아가도록)
-		//SetForceRotation(true, InTargetRotation);
+		bIsInteracting = true;
+		OnRep_IsInteracting(); // 여기서 콜리전 끄는 로직이 실행됨!
 
-		// 2. 판자 충돌 무시 (Ignore)
-		if (UCapsuleComponent* Cap = GetCapsuleComponent())
-		{
-			Cap->SetCollisionResponseToChannel(PalletCollisionChannel, ECR_Ignore);
-		}
-
-		// 3. 키보드/마우스 이동 입력 막기
 		if (Controller)
 		{
 			Controller->SetIgnoreMoveInput(true);
@@ -106,16 +136,41 @@ void AHiderCharacter::StopVaulting()
 {
 	if (IsLocallyControlled() || HasAuthority())
 	{
-		// 1. 회전 고정 끄기
+		bIsInteracting = false;
+		OnRep_IsInteracting(); // 여기서 콜리전 켜는 로직이 실행됨!
+
 		SetForceRotation(false);
 
-		// 2. 판자 충돌 원상복구 (Block)
-		if (UCapsuleComponent* Cap = GetCapsuleComponent())
+		if (Controller)
 		{
-			Cap->SetCollisionResponseToChannel(PalletCollisionChannel, ECR_Block);
+			Controller->SetIgnoreMoveInput(false);
 		}
+	}
+}
 
-		// 3. 키보드/마우스 이동 입력 복구
+void AHiderCharacter::StartClimb()
+{
+	if (IsLocallyControlled() || HasAuthority())
+	{
+		bIsInteracting = true;
+		OnRep_IsInteracting();
+
+		if (Controller)
+		{
+			Controller->SetIgnoreMoveInput(true);
+		}
+	}
+}
+
+void AHiderCharacter::StopClimb()
+{
+	if (IsLocallyControlled() || HasAuthority())
+	{
+		bIsInteracting = false;
+		OnRep_IsInteracting();
+
+		SetForceRotation(false);
+
 		if (Controller)
 		{
 			Controller->SetIgnoreMoveInput(false);

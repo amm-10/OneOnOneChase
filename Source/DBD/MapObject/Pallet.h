@@ -74,6 +74,6 @@ public:
 
 
 	// 블루프린트에서 호출할 수 있도록 UFUNCTION 추가
-	UFUNCTION(BlueprintCallable, Category = "Pallet Interaction")
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	FTransform GetSnapTransform(AActor* Interactor);
 };
